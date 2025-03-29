@@ -1,0 +1,8 @@
+# Sensitive data
+*.env
+assets
+
+# Build files
+build/
+dist/
+node_modules/
