@@ -1,4 +1,4 @@
-import { ChannelType } from "discord.js";
+import { ChannelType } from 'discord.js';
 
 type Brand<T, U> = T & { __brand: U };
 
