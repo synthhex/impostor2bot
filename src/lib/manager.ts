@@ -10,10 +10,12 @@ export enum SessionError {
 
 export default class SessionManager {
 	private sessions: Map<ChannelId<ChannelType.GuildVoice>, Session>;
+	private guilds: Map<Snowflake, Set<Session>>;
 	private client: ImpostorClient;
 
 	constructor(client: ImpostorClient) {
 		this.sessions = new Map();
+		this.guilds = new Map();
 		this.client = client;
 	}
 
@@ -31,11 +33,30 @@ export default class SessionManager {
 
 		const session = new Session(this.client, voiceChannel, user, textChannel);
 		this.sessions.set(voiceChannel.id as ChannelId<ChannelType.GuildVoice>, session);
+		if (!this.guilds.has(voiceChannel.guild.id)) this.guilds.set(voiceChannel.guild.id, new Set());
+		this.guilds.get(voiceChannel.guild.id)?.add(session);
+
 		return session;
 	}
 
 	public deleteSession(voiceChannel: VoiceChannel): boolean {
-		this.sessions.get(voiceChannel.id as ChannelId<ChannelType.GuildVoice>)?.unmute();
+		const session = this.sessions.get(voiceChannel.id as ChannelId<ChannelType.GuildVoice>);
+
+		if (!session) return false;
+
+		session.unmute();
+		this.guilds.get(voiceChannel.guild.id)?.delete(session);
+		if (this.guilds.get(voiceChannel.guild.id)?.size === 0) this.guilds.delete(voiceChannel.guild.id);
 		return this.sessions.delete(voiceChannel.id as ChannelId<ChannelType.GuildVoice>);
+	}
+
+	public leaveGuild(guildId: Snowflake): void {
+		const sessions = this.guilds.get(guildId);
+		if (!sessions) return;
+
+		for (const session of sessions)
+			this.deleteSession(session.voiceChannel);
+
+		this.guilds.delete(guildId);
 	}
 }

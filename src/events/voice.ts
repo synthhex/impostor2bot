@@ -1,10 +1,10 @@
-import { ChannelType, Events, VoiceState } from 'discord.js';
+import { ChannelType, ClientEvents, Events, VoiceState } from 'discord.js';
 import ImpostorClient from '../lib/client';
 
 export const name = Events.VoiceStateUpdate;
 export const once = false;
-export async function execute(oldState: VoiceState, newState: VoiceState) {
-	const client = newState.client as ImpostorClient;
+export async function execute(client: ImpostorClient, ...args: ClientEvents[typeof name]) {
+	const [oldState, newState] = args;
 
 	if (oldState?.member?.user.bot || newState?.member?.user.bot) return; // ignore bot users
 

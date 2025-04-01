@@ -10,7 +10,7 @@ const clientSettings: ClientOptions = {
 		],
 		status: 'online',
 	},
-	intents: [GatewayIntentBits.Guilds, GatewayIntentBits.GuildVoiceStates, GatewayIntentBits.GuildMessages],
+	intents: [GatewayIntentBits.Guilds, GatewayIntentBits.GuildVoiceStates],
 	makeCache: Options.cacheWithLimits({
 		MessageManager: 0,
 		ApplicationCommandManager: 0,

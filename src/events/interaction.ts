@@ -1,14 +1,15 @@
-import { Events, Interaction, MessageFlags } from 'discord.js';
+import { ClientEvents, Events, Interaction, MessageFlags } from 'discord.js';
 import { log } from '../utils/logger';
 import ImpostorClient from '../lib/client';
 
 export const name = Events.InteractionCreate;
 export const once = false;
-export async function execute(interaction: Interaction) {
-	if (!interaction.isChatInputCommand()) return;
-	// if (interaction.user.bot) return;
+export async function execute(client: ImpostorClient, ...args: ClientEvents[typeof name]) {
+	const [interaction] = args;
 
-	const client = interaction.client as ImpostorClient;
+	if (!interaction.isChatInputCommand()) return;
+	if (interaction.user.bot) return;
+
 	const command = client.commands.get(interaction.commandName);
 
 	if (!command) {
@@ -17,7 +18,7 @@ export async function execute(interaction: Interaction) {
 	}
 
 	try {
-		await command.execute(interaction);
+		await command.execute(client, interaction);
 	} catch (error) {
 		log(`Error executing command ${interaction.commandName}: ${error}`);
 

@@ -143,7 +143,7 @@ export default class ImpostorClient extends Client {
 			const event = module as Event;
 
 			if (event.name && event.execute) {
-				this.on(event.name, (...args) => event.execute(...args));
+				this.on(event.name, (...args) => event.execute(this, ...args));
 				++ctr;
 			} else {
 				throw new Error(`Event ${file} does not have a valid name or execute method`);
