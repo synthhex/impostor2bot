@@ -1,5 +1,4 @@
 import { ClientEvents, Events, ChannelType } from 'discord.js';
-import { log } from '../utils/logger';
 import ImpostorClient from '../lib/client';
 
 export const name = Events.ChannelDelete;
@@ -11,6 +10,5 @@ export async function execute(client: ImpostorClient, ...args: ClientEvents[type
 
     const session = client.sessionManager.getSession(channel);
     if (!session) return;
-
-    client.sessionManager.deleteSession(channel); // remove the session from the manager
+    await session.handleChannelDelete();
 }

@@ -2,6 +2,9 @@
 *.env
 assets
 
+# Logs
+log.txt
+
 # Build files
 build/
 dist/

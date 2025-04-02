@@ -8,18 +8,17 @@ import {
 	GuildMember,
 	SlashCommandBuilder,
 } from 'discord.js';
-import Command from './command';
+import Command, { CommandBlueprint } from './command';
 import { readdirSync } from 'fs';
 import Event from './event';
 import path from 'path';
-import { log } from '../utils/logger';
+import Logger from '../utils/logger';
 import SessionManager from './manager';
 
 declare module 'discord.js' {
 	interface Client {
 		commands: Collection<string, Command>;
 		sessionManager: SessionManager;
-		getOutOfJail: Set<string>;
 		assets: Collection<string, AttachmentBuilder>;
 		shouldBeFreed(user: GuildMember): boolean;
 		free(user: GuildMember): void;
@@ -32,37 +31,28 @@ declare module 'discord.js' {
 
 export default class ImpostorClient extends Client {
 	public commands: Collection<string, Command> = new Collection();
+	public events: Collection<string, Event> = new Collection();
 	public sessionManager: SessionManager = new SessionManager(this);
-	public getOutOfJail: Set<string> = new Set();
 
 	public assets: Collection<string, AttachmentBuilder> = new Collection();
 
-	constructor(config: ClientOptions) {
-		super(config);
-	}
+	constructor(config: ClientOptions) { super(config); }
 
-	public shouldBeFreed(user: GuildMember): boolean {
-		if (this.getOutOfJail.has(user.id)) {
-			this.getOutOfJail.delete(user.id);
-			return true;
-		}
-		return false;
-	}
-
-	public free(user: GuildMember): void {
-		if (this.getOutOfJail.has(user.id)) return;
-		this.getOutOfJail.add(user.id);
-	}
-
+	/**
+	 * Get an asset safely in a format that can be passed directly to discord.js.
+	 * @param name The name of the asset to get.
+	 * @returns An single-element tuple with an AttachmentBuilder object, or an empty array if the asset was not found.
+	 */
 	public safeAsset(name: string): [AttachmentBuilder] | [] {
 		const asset = this.assets.get(name);
 		if (!asset) {
-			log(`Asset ${name} not found!`);
+			Logger.warn(`Asset ${name} not found!`);
 			return [];
 		}
 		return [asset];
 	}
 
+	/** Load assets from the assets directory. */
 	public async loadAssets(): Promise<void> {
 		const assets = ['nope.gif', 'bi.png', 'mult.gif', 'thumb.png', 'disintegrate.png', 'gus.jpeg'];
 		const assetsPath = path.join(__dirname, '../../assets');
@@ -70,26 +60,33 @@ export default class ImpostorClient extends Client {
 
 		for (const file of assets) {
 			const filePath = path.join(assetsPath, file);
-			log(`Loading asset file: ${filePath}`);
+			Logger.log(`Loading asset file: ${filePath}`);
 			if (!filePath.startsWith(assetsPath))
 				throw new Error(`Attempted to load file outside assets directory: ${filePath}`);
 			const attachment = new AttachmentBuilder(filePath);
 			assetCollection.set(file, attachment);
 		}
 
-		log(`Loaded ${assetCollection.size} assets!`);
+		Logger.log(`Loaded ${assetCollection.size} assets!`);
 		this.assets = assetCollection;
 	}
 
+	/** Load collected commands. */
 	public async loadCommands(): Promise<void> {
 		const commands = await ImpostorClient.collectCommands();
-		this.commands = commands;
-		console.log(this.commands);
-		log(`Loaded ${this.commands.size} commands!`);
+		for (const [name, command] of commands) {
+			this.commands.set(name, new Command({
+				client: this,
+				data: command.data,
+				execute: command.execute,
+			}));
+		}
+		Logger.log(`Loaded ${this.commands.size} commands!`);
 	}
 
-	public static async collectCommands(): Promise<Collection<string, Command>> {
-		const commands = new Collection<string, Command>();
+	/** Traverse and load all command files in the commands directory. Returns the commands. */
+	public static async collectCommands(): Promise<Collection<string, CommandBlueprint>> {
+		const commands = new Collection<string, CommandBlueprint>();
 		const commandsPath = path.join(__dirname, '../commands');
 		const commandFiles = readdirSync(commandsPath).filter((file) => file.endsWith('.ts') || file.endsWith('.js'));
 
@@ -98,7 +95,7 @@ export default class ImpostorClient extends Client {
 		for (const file of commandFiles) {
 			const filePath = path.join(commandsPath, file);
 
-			log(`Loading command file: ${filePath}`);
+			Logger.log(`Loading command file: ${filePath}`);
 
 			if (!filePath.startsWith(commandsPath))
 				throw new Error(`Attempted to load file outside commands directory: ${filePath}`);
@@ -107,22 +104,26 @@ export default class ImpostorClient extends Client {
 				throw new Error(`Error loading command file ${filePath}: ${error}`);
 			});
 
-			const command = module as Command;
+			const command = module as CommandBlueprint;
 
 			if (command.data instanceof SlashCommandBuilder) {
-				commands.set(command.data.name, command);
+				commands.set(command.data.name, {
+					data: command.data,
+					execute: command.execute,
+				});
 				++ctr;
 			} else {
 				throw new Error(`Command ${file} does not have a valid data property`);
 			}
 		}
 
-		log(`Collected ${ctr} commands!`);
+		Logger.log(`Collected ${ctr} commands!`);
 
 		return commands;
 	}
 
-	public async loadEvents() {
+	/** Load all event files in the events directory. */
+	public async loadEvents(): Promise<void> {
 		const eventsPath = path.join(__dirname, '../events');
 		const eventFiles = readdirSync(eventsPath).filter((file) => file.endsWith('.ts') || file.endsWith('.js'));
 
@@ -131,7 +132,7 @@ export default class ImpostorClient extends Client {
 		for (const file of eventFiles) {
 			const filePath = path.join(eventsPath, file);
 
-			log(`Loading event file: ${filePath}`);
+			Logger.log(`Loading event file: ${filePath}`);
 
 			if (!filePath.startsWith(eventsPath))
 				throw new Error(`Attempted to load file outside events directory: ${filePath}`);
@@ -140,16 +141,22 @@ export default class ImpostorClient extends Client {
 				throw new Error(`Error loading event file ${filePath}: ${error}`);
 			});
 
-			const event = module as Event;
+			const event = new Event(module);
 
 			if (event.name && event.execute) {
-				this.on(event.name, (...args) => event.execute(this, ...args));
+				this.on(event.name, async (...args) => {
+					try {
+						await event.execute(this, ...args);	
+					} catch (error) {
+						Logger.error(`Error executing event ${event.name}: ${error}`);
+					}
+				});
 				++ctr;
 			} else {
 				throw new Error(`Event ${file} does not have a valid name or execute method`);
 			}
 		}
 
-		log(`Loaded ${ctr} events!`);
+		Logger.log(`Loaded ${ctr} events!`);
 	}
 }

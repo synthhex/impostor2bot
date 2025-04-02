@@ -1,62 +1,69 @@
-import { ChannelType, ClientEvents, Events, VoiceState } from 'discord.js';
+import { ChannelType, ClientEvents, Events, VoiceChannel, VoiceState } from 'discord.js';
 import ImpostorClient from '../lib/client';
+import { isGuildVoice, isServerMuted, statVoiceState, VoiceUpdateType } from '../utils/voice';
+import Tracker from '../lib/tracker';
 
 export const name = Events.VoiceStateUpdate;
 export const once = false;
 export async function execute(client: ImpostorClient, ...args: ClientEvents[typeof name]) {
 	const [oldState, newState] = args;
 
-	if (oldState?.member?.user.bot || newState?.member?.user.bot) return; // ignore bot users
+	if (oldState === null || newState === null) return; // ignore if the state is null
 
-	if (oldState.channel === null && newState.channel !== null) {
-		// User joined a voice channel.
-		if (newState.channel.type !== ChannelType.GuildVoice) return; // ignore non-voice channels
+	const member = oldState.member || newState.member;
+	if (!member) return; // ignore if the member is null
+	if (member.user.bot) return; // ignore if the user is a bot
 
-		const session = client.sessionManager.getSession(newState.channel);
-		if (!session || !session.muted) {
-			if (client.shouldBeFreed(newState.member!) && newState.member!.voice.serverMute)
-				return newState.member!.voice.setMute(false, 'Left while previously muted.');
-			return;
+
+	const stateUpdate = statVoiceState(oldState, newState);
+
+	switch (stateUpdate) {
+		case VoiceUpdateType.JOINED_CHANNEL: {
+			if (!isGuildVoice(newState.channel)) return;
+			const joinSession = client.sessionManager.getSession(newState.channel);
+			if (joinSession)
+				return await joinSession.handleMemberJoin(newState.member!);
+			return Tracker.popMute(newState.member!);
 		}
-
-		session.userJoined(newState.member!); // let the session handle the user joining
-	} else if (oldState.channel !== null && newState.channel === null) {
-		// User left a voice channel.
-		if (oldState.channel.type !== ChannelType.GuildVoice) return; // ignore non-voice channels
-
-		const session = client.sessionManager.getSession(oldState.channel);
-		if (!session) return; // ignore if the session doesn't exist, whatever
-
-		session.userLeft(oldState.member!); // let the session handle the user leaving
-	} else if (oldState.channel !== null && newState.channel !== null) {
-		// User switched voice channels. The most complicated one.
-		if (oldState.channelId === newState.channelId && oldState.channel.type === ChannelType.GuildVoice) {
-			// User didn't actually switch channels, just updated their voice state.
-			const session = client.sessionManager.getSession(oldState.channel);
-			if (oldState.member!.id === session?.user.id) {
-				// If the user is the one who created the session, toggle the session.
-				if (oldState.selfMute && !newState.selfMute) session.unmute();
-				else if (!oldState.selfMute && newState.selfMute) session.mute();
-				return;
+		case VoiceUpdateType.LEFT_CHANNEL: {
+			if (!isGuildVoice(oldState.channel)) return;
+			const leaveSession = client.sessionManager.getSession(oldState.channel);
+			if (leaveSession) {
+				if (isServerMuted(oldState.member!))
+					Tracker.stashMute(oldState.member!);
+				return await leaveSession.handleMemberLeave(oldState.member!);
 			}
 			return;
 		}
-
-		if (oldState.channel.type === ChannelType.GuildVoice) {
-			// if the old channel is a voice channel
-			const session = client.sessionManager.getSession(oldState.channel);
-			if (session)
-				session.userLeft(
-					oldState.member!,
-					newState.channel.type === ChannelType.GuildVoice &&
-						client.sessionManager.getSession(newState.channel)?.muted === false,
-				); // let the session handle the user leaving
+		case VoiceUpdateType.SWITCHED_FROM_STAGE_TO_VOICE: {
+			if (!isGuildVoice(newState.channel)) return;
+			const joinSession = client.sessionManager.getSession(newState.channel);
+			if (joinSession) return await joinSession.handleMemberJoin(newState.member!);
+			return;
 		}
-
-		if (newState.channel.type === ChannelType.GuildVoice) {
-			// if the new channel is a voice channel
-			const session = client.sessionManager.getSession(newState.channel);
-			if (session) session.userJoined(newState.member!); // let the session handle the user joining
+		case VoiceUpdateType.SWITCHED_FROM_VOICE_TO_STAGE: {
+			const leaveSession = client.sessionManager.getSession(oldState.channel as VoiceChannel);
+			if (leaveSession) {
+				if (isServerMuted(oldState.member!))
+					Tracker.stashMute(oldState.member!);
+				return await leaveSession.handleMemberLeave(oldState.member!);
+			}
+			return;
+		}
+		case VoiceUpdateType.SWITCHED_VOICE_CHANNELS: {
+			if (!isGuildVoice(oldState.channel) || !isGuildVoice(newState.channel)) return;
+			const leaveSession = client.sessionManager.getSession(oldState.channel);
+			const joinSession = client.sessionManager.getSession(newState.channel);
+			if (leaveSession && joinSession) {
+				await joinSession.handleMemberJoin(newState.member!);
+			} else if (leaveSession && !joinSession) {
+				await leaveSession.handleMemberLeave(oldState.member!);
+			} else if (!leaveSession && joinSession) {
+				await joinSession.handleMemberJoin(newState.member!);
+			} else {
+				// No sessions involved. Pass.
+				return;
+			}
 		}
 	}
 }

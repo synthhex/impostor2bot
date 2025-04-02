@@ -1,4 +1,4 @@
-import { ChannelType, Interaction, MessageFlags, PermissionFlagsBits, SlashCommandBuilder } from 'discord.js';
+import { ChannelType, ChatInputCommandInteraction, Interaction, MessageFlags, PermissionFlagsBits, SlashCommandBuilder } from 'discord.js';
 import ImpostorClient from '../lib/client';
 
 export const data = new SlashCommandBuilder()
@@ -14,7 +14,7 @@ export const data = new SlashCommandBuilder()
 		subcommand.setName('steal').setDescription("Steal ownership of your channel's session."),
 	);
 
-export const execute = async (interaction: Interaction) => {
+export const execute = async (client: ImpostorClient, interaction: ChatInputCommandInteraction) => {
 	if (!interaction.isChatInputCommand()) return;
 	if (
 		!interaction.member ||
@@ -31,10 +31,13 @@ export const execute = async (interaction: Interaction) => {
 			flags: MessageFlags.Ephemeral,
 		}); // somehow...
 
+	if (interaction.member.user.bot) 
+		return await interaction.reply({
+			content: 'Bots cannot use this command.',
+		});
+	
 	const subcommand = interaction.options.getSubcommand();
 	const sessionManager = (interaction.client as ImpostorClient).sessionManager;
-
-	const client = interaction.client;
 
 	switch (subcommand) {
 		case 'start':
@@ -68,9 +71,9 @@ export const execute = async (interaction: Interaction) => {
 					files: client.safeAsset('disintegrate.png'),
 					flags: MessageFlags.Ephemeral,
 				});
-			if (session.user.id !== interaction.user.id) {
+			if (!session.isOwner(interaction.member)) {
 				if (interaction.member.permissions.has(PermissionFlagsBits.ModerateMembers)) {
-					sessionManager.deleteSession(interaction.member.voice.channel);
+					session.destroySession();
 					return await interaction.reply({
 						content: 'Sure mr. discord cheeto mod, session stopped.',
 						files: client.safeAsset('mult.gif'),
@@ -80,9 +83,10 @@ export const execute = async (interaction: Interaction) => {
 						files: client.safeAsset('nope.gif'),
 					});
 				}
+			} else {
+				session.destroySession();
 			}
 
-			sessionManager.deleteSession(interaction.member.voice.channel);
 			await interaction.reply({
 				content: 'Stopping the current session...',
 				files: client.safeAsset('thumb.png'),
@@ -96,15 +100,13 @@ export const execute = async (interaction: Interaction) => {
 					files: client.safeAsset('disintegrate.png'),
 					flags: MessageFlags.Ephemeral,
 				});
-			if (stealSession.user.id === interaction.user.id)
+			if (stealSession.isOwner(interaction.member))
 				return await interaction.reply({
 					content: 'How you gonna steal your own session lmfao? Bobec.',
 					files: client.safeAsset('bi.png'),
 				});
 			if (interaction.member.permissions.has(PermissionFlagsBits.ModerateMembers)) {
-				interaction.member.voice.setMute(false, 'Stolen session.');
-				stealSession.user.voice.setMute(true, 'Stolen session.');
-				stealSession.changeOwner(interaction.member);
+				await stealSession.changeOwner(interaction.member);
 				return await interaction.reply({
 					content: 'Sure mr. discord cheeto mod, enjoy the kradena sesiq.',
 					files: client.safeAsset('mult.gif'),

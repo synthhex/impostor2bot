@@ -1,7 +1,7 @@
 import { REST, Routes } from 'discord.js';
 import ImpostorClient from './lib/client';
 import { tryReadEnv } from './utils/env';
-import { log } from './utils/logger';
+import Logger from './utils/logger';
 
 async function main() {
 	const commands = Array.from((await ImpostorClient.collectCommands()).values()).map((command) =>
@@ -14,16 +14,16 @@ async function main() {
 	const guildId = process.argv.slice(2).includes('--all') ? 'A' : (process.env.TEST_GUILD_ID ?? null);
 
 	if (!guildId) {
-		log(
+		Logger.log(
 			'No TEST_GUILD_ID environmental variable set. If you want to refresh all guilds, run this script with the --all flag.',
 		);
 		return;
 	} else {
-		log(guildId === 'A' ? `Using all guilds.` : `Using guild ID: ${guildId}`);
+		Logger.log(guildId === 'A' ? `Using all guilds.` : `Using guild ID: ${guildId}`);
 	}
 
 	try {
-		log(`Started refreshing/uploading ${commands.length} slash commands.`);
+		Logger.log(`Started refreshing/uploading ${commands.length} slash commands.`);
 
 		const data = await rest.put(
 			guildId === 'A'
@@ -32,7 +32,7 @@ async function main() {
 			{ body: commands },
 		);
 
-		log(`Successfully refreshed/uploaded ${(data as []).length} slash commands.`);
+		Logger.log(`Successfully refreshed/uploaded ${(data as []).length} slash commands.`);
 	} catch (error) {
 		throw new Error(`Error uploading commands: ${error}`);
 	}

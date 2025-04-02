@@ -1,6 +1,11 @@
 import { Interaction, SlashCommandBuilder } from 'discord.js';
 import ImpostorClient from './client';
 
+export interface CommandBlueprint {
+	data: SlashCommandBuilder;
+	execute: (client: ImpostorClient, interaction: Interaction) => Promise<void>;
+}
+
 export default class Command {
 	public data: SlashCommandBuilder;
 	public execute: (client: ImpostorClient, interaction: Interaction) => Promise<void>;

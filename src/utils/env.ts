@@ -1,7 +1,3 @@
-import { config } from 'dotenv';
-
-config({ path: 'secrets.env' });
-
 /**
  * Try to read an environment variable and parse it as JSON.
  * @param env The target name of the environment variable.
