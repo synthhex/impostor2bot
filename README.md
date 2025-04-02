@@ -27,10 +27,10 @@ These are the current commands as of April 1st, 2025:
 # Set up locally
 First, you need to create a file named "secrets.env" in the root folder. It needs to contain the following values:
 
-> DISCORD_TOKEN=<YOUR_DISCORD_BOT_TOKEN>
-> CLIENT_ID=<THE_ID_OF_YOUR_BOT>
-> TEST_GUILD_ID=<YOUR_TEST_GUILD_ID>
-> STORE_LOGS=<TRUE_OR_FALSE> (optional, the bot WILL log if you don't set it yourself)
+- `DISCORD_TOKEN=<YOUR_DISCORD_BOT_TOKEN>`
+- `CLIENT_ID=<THE_ID_OF_YOUR_BOT>`
+- `TEST_GUILD_ID=<YOUR_TEST_GUILD_ID>`
+- `STORE_LOGS=<TRUE_OR_FALSE>` (optional, the bot WILL log if you don't set it yourself)
 
 The aforementioned test guild is a guild in which you can deploy your slash commands to test them out before deploying them.
 
