@@ -117,6 +117,48 @@ export const execute = async (client: ImpostorClient, interaction: ChatInputComm
 				});
 			}
 			break;
+		case "optout":
+			const optoutSession = sessionManager.getSession(interaction.member.voice.channel);
+			if (!optoutSession)
+				return await interaction.reply({
+					content: 'No session exists in this channel.',
+					files: client.safeAsset('disintegrate.png'),
+					flags: MessageFlags.Ephemeral,
+				});
+			if (optoutSession.isOptedOut(interaction.member)) {
+				return await interaction.reply({
+					content: 'You are already opted out of the session.',
+					files: client.safeAsset('thumb.png'),
+				});
+			} else {
+				optoutSession.optOut(interaction.member);
+				return await interaction.reply({
+					content: 'You have opted out of the session.',
+					files: client.safeAsset('thumb.png'),
+				});
+			}
+			break;
+		case "optin":
+			const optinSession = sessionManager.getSession(interaction.member.voice.channel);
+			if (!optinSession)
+				return await interaction.reply({
+					content: 'No session exists in this channel.',
+					files: client.safeAsset('disintegrate.png'),
+					flags: MessageFlags.Ephemeral,
+				});
+			if (!optinSession.isOptedOut(interaction.member)) {
+				return await interaction.reply({
+					content: 'You are not opted out of the session.',
+					files: client.safeAsset('thumb.png'),
+				});
+			} else {
+				optinSession.optIn(interaction.member);
+				return await interaction.reply({
+					content: 'You have opted in to the session.',
+					files: client.safeAsset('thumb.png'),
+				});
+			}
+			break;
 		default:
 			await interaction.reply({
 				content: 'Unknown subcommand.',

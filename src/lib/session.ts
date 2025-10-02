@@ -22,6 +22,8 @@ export default class Session {
 	private createdAt: Date = new Date();
 	private state: SessionState = SessionState.UNMUTED;
 
+	private optedOut: Set<Snowflake> = new Set();
+
 	constructor(client: ImpostorClient, voiceChannel: VoiceChannel, member: GuildMember, textChannel: TextChannel, destroy?: (...args: any) => void) {
 		this.client = client;
 		this.voiceChannel = voiceChannel;
@@ -33,6 +35,10 @@ export default class Session {
 			this.client.sessionManager.destroySession(this);
 		});
 	}
+
+	public isOptedOut(member: GuildMember): boolean { return this.optedOut.has(member.id); }
+	public optOut(member: GuildMember): void { this.optedOut.add(member.id); }
+	public optIn(member: GuildMember): void { this.optedOut.delete(member.id); }
 
 	public getOwner(): GuildMember { return this.owner; }
 	public async changeOwner(member: GuildMember) { 
@@ -51,6 +57,7 @@ export default class Session {
 	 */
 	public async handleMemberJoin(member: GuildMember) {
 		if (isBot(member)) return;
+		if (this.isOptedOut(member)) return;
 		if (this.isMuted() && !isServerMuted(member)) await muteMember(member, VoiceUpdateReason.IN_DISCUSSION);
 		if (!this.isMuted() && isServerMuted(member)) await unmuteMember(member, VoiceUpdateReason.NOT_IN_DISCUSSION);
 	}
@@ -90,6 +97,7 @@ export default class Session {
 		voiceChannel.members.forEach(async (member) => {
 			if (this.isOwner(member) || isBot(member)) return;
 			if (isServerMuted(member)) return;
+			if (this.isOptedOut(member)) return;
 
 			muteMember(member, VoiceUpdateReason.IN_DISCUSSION)
 				.catch(() => Logger.warn(`Failed to mute ${member.user.tag} in ${this.voiceChannel.name}.`));
@@ -111,6 +119,7 @@ export default class Session {
 		voiceChannel.members.forEach(async (member) => {
 			if (this.isOwner(member) || isBot(member)) return;
 			if (!isServerMuted(member)) return;
+			if (this.isOptedOut(member)) return;
 
 			unmuteMember(member, VoiceUpdateReason.NOT_IN_DISCUSSION)
 				.catch(() => Logger.warn(`Failed to unmute ${member.user.tag} in ${this.voiceChannel.name}.`));
